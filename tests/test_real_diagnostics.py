@@ -9,6 +9,7 @@ import unittest
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from audit_log import HashChainAuditLog
@@ -292,11 +293,27 @@ class RealDiagnosticsTests(unittest.TestCase):
 
     def test_disk_is_real_and_context_lists_only_configured_resources(self):
         result = self.call("check_disk", {})
-        self.assertEqual(result["total"], result["free"] + result["used"])
+        # Unix can reserve blocks: free is caller-available space, while used
+        # excludes all free blocks. Their sum need not equal the volume total.
         self.assertGreater(result["total"], 0)
+        for field in ("total", "used", "free"):
+            self.assertIsInstance(result[field], int)
+            self.assertGreaterEqual(result[field], 0)
+            self.assertLessEqual(result[field], result["total"])
+        self.assertLessEqual(result["free"] + result["used"], result["total"])
         self.assertEqual(result["backend"], "local_readonly")
         self.assertTrue(result["observed_at"])
         self.assertEqual(self.executor.public_context(), {"backend": "local_readonly", "services": ["nginx"], "log_paths": ["/var/log/nginx/error.log"], "tools": ["get_service_status", "read_log", "check_disk"]})
+
+    def test_disk_preserves_available_space_when_volume_has_reserved_blocks(self):
+        for free in (500, 600):
+            with self.subTest(available_bytes=free):
+                sample = SimpleNamespace(total=1000, used=400, free=free)
+                with patch("real_diagnostics.shutil.disk_usage", return_value=sample):
+                    result = self.call("check_disk", {})
+                # Preserve the OS observation; do not invent free=total-used.
+                self.assertEqual((result["total"], result["used"], result["free"]),
+                                 (1000, 400, free))
 
 
 if __name__ == "__main__":
