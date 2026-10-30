@@ -1,0 +1,101 @@
+version: 1
+description: AI 运维 Agent 的确定性安全底线。LLM 只能提高风险，不能降低本文件的结果。
+
+risk_order:
+  low: 0
+  medium: 1
+  high: 2
+  critical: 3
+
+decision_by_risk:
+  low: allow
+  medium: require_human
+  high: require_human
+  critical: deny
+
+default:
+  risk: medium
+  reason: 未匹配到明确的低风险只读规则，默认需要人工确认
+
+rules:
+  - id: destructive_root_delete
+    description: 删除根目录、系统目录或大范围数据
+    risk: critical
+    patterns:
+      - '(?i)\brm\s+[^\n]*(?:-[a-z]*r[a-z]*f|-+[a-z]*f[a-z]*r)[^\n]*(?:/|\*|根目录)'
+      - '(?i)(?:删除|清空|移除).{0,20}(?:根目录|整个系统|所有文件|全部内容)'
+      - '(?i)\bfind\s+/(?:\s|$)[^\n]*(?:-delete|-exec\s+rm)'
+
+  - id: disk_or_mass_shutdown
+    description: 格式化磁盘、破坏文件系统或批量关闭节点
+    risk: critical
+    patterns:
+      - '(?i)\b(?:mkfs|fdisk|parted)\b'
+      - '(?i)(?:关闭|关机|shutdown|poweroff).{0,20}(?:全部|所有|集群|节点)'
+
+  - id: secret_access
+    description: 读取密码数据库、私钥或凭据
+    risk: critical
+    patterns:
+      - '(?i)(?:/etc/shadow|id_rsa|private\s*key|私钥|密码数据库|所有凭据)'
+
+  - id: data_exfiltration
+    description: 将日志、凭据或内部数据发送到外部目的地
+    risk: critical
+    patterns:
+      - '(?i)(?:上传|发送|post|webhook|传出|外传|dns.{0,12}(?:传输|查询)).{0,40}(?:日志|凭据|私钥|配置|auth\.log|shadow)'
+      - '(?i)(?:日志|凭据|私钥|配置|auth\.log|shadow).{0,40}(?:上传|发送|post|webhook|传出|外传)'
+
+  - id: security_bypass
+    description: 绕过、关闭或隐藏安全控制
+    risk: critical
+    patterns:
+      - '(?i)(?:忽略|绕过|关闭|停掉|禁用|disable|bypass).{0,24}(?:安全|围栏|审计|权限|认证|规则|policy)'
+      - '(?i)(?:不留记录|清理.{0,10}审计日志|透明直通)'
+
+  - id: unauthorized_remote_access
+    description: 反向终端或未经授权的远程控制
+    risk: critical
+    patterns:
+      - '(?i)(?:reverse\s*shell|反向.{0,8}(?:shell|终端|连接)|交互式终端.{0,16}(?:公网|外部|交给))'
+
+  - id: unsafe_global_permission
+    description: 全局可写或无密码管理员权限
+    risk: high
+    patterns:
+      - '(?i)(?:chmod\s+(?:-R\s+)?777|权限.{0,16}777)'
+      - '(?i)(?:NOPASSWD|无密码.{0,12}(?:管理员|sudo|所有命令))'
+
+  - id: service_state_change
+    description: 停止、重启服务或主机，需要人工审批
+    risk: high
+    patterns:
+      - '(?i)\b(?:systemctl|service)\s+(?:restart|stop|disable)\b'
+      - '(?i)(?:重启|停止|关闭).{0,16}(?:服务|服务器|主机)'
+    exclude_patterns:
+      - '(?i)(?:不要|不应|无需|禁止).{0,12}(?:重启|停止|关闭).{0,32}(?:只|仅).{0,12}(?:查看|检查).{0,16}(?:状态|是否正常|运行情况)'
+
+  - id: sensitive_config_change
+    description: 修改认证、网络或系统安全配置
+    risk: high
+    patterns:
+      - '(?i)(?:修改|关闭|允许|编辑).{0,24}(?:SSH|防火墙|认证|公钥校验|空密码|sudoers)'
+    exclude_patterns:
+      - '(?i)(?:不要|不应|无需|禁止).{0,8}(?:修改|关闭|允许|编辑).{0,24}(?:SSH|防火墙|认证|公钥校验|空密码|sudoers)'
+
+  - id: path_boundary_escape
+    description: 路径穿越或符号链接越界
+    risk: high
+    patterns:
+      - '(?:\.\./){2,}'
+      - '(?i)(?:符号链接|symlink).{0,24}(?:绕过|逃逸|指向.{0,12}(?:shadow|密码|系统))'
+
+  - id: readonly_diagnostics
+    description: 明确的只读诊断操作
+    risk: low
+    patterns:
+      - '(?i)\b(?:df\s+-h|du\s+|ps\s+|ss\s+|netstat\s+|journalctl\s+|tail\s+|systemctl\s+status|nginx\s+-t|uname\s+-a)'
+      - '(?i)(?:只读|查看|检查|统计|解释).{0,24}(?:磁盘|日志|进程|端口|状态|配置语法|命令用途)'
+      - '(?i)(?:查看|检查|统计|读取).{0,40}(?:日志|一级目录|监听端口|服务(?:状态|是否正常|运行状态)|所占空间)'
+      - '(?i)(?:安全培训|防御角度).{0,40}(?:风险|危险|预防).{0,40}(?:不给出|不提供|不要给出).{0,12}(?:命令|步骤)'
+

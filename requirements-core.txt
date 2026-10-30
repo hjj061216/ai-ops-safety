@@ -1,0 +1,2 @@
+# Web console and deterministic tool/policy checks (Python 3.12).
+PyYAML==6.0.3

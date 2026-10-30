@@ -1,0 +1,38 @@
+# Local environments and credentials
+.venv/
+**/.venv/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.codex*/
+.agents/
+
+# Runtime data and generated reports
+data/
+dist/
+evaluations/
+reproductions/**/*results*.json
+
+# Local presentation authoring workspaces and exports
+projects/
+deliverables/
+agent-architecture-review/
+agent-safety-*/
+*.pptx
+*.ppt
+*.pdf
+*.chart
+*.ndjson
+_ref_*.png
+repair_part1_v2.py

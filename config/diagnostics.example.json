@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "services": {
+    "nginx": {
+      "health_url": "http://127.0.0.1:8766/health"
+    }
+  },
+  "logs": {
+    "/var/log/nginx/error.log": "C:/path/to/your/service/error.log"
+  }
+}

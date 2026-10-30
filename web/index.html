@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light"><title>AI 运维安全控制台</title>
+<link rel="stylesheet" href="/assets/workbench.css">
+</head>
+<body>
+<svg class="icon-defs" aria-hidden="true"><defs>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m8 12 3 3 5-6"/><rect x="4" y="3" width="16" height="18" rx="3"/></symbol>
+<symbol id="i-tool" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></symbol>
+<symbol id="i-record" viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3zm1 5h7m-7 4h8m-8 4h8"/></symbol>
+</defs></svg>
+<header class="app-header">
+<div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 28 32" fill="none"><path d="M14 2 25 6v9c0 7-7 12-11 15C10 27 3 22 3 15V6L14 2Z" stroke="currentColor" stroke-width="2"/><path d="m8 15 4 4 8-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h1>AI 运维安全控制台</h1><p>操作可控 · 结果可查</p></div></div>
+<div class="header-end"><span id="executionBadge" class="badge">执行模式待确认</span><div id="sessionBar" class="session-bar" hidden><span id="currentUser"></span><a href="/" target="_blank" rel="noopener noreferrer">新标签页登录其他账号</a><button id="logoutButton" class="secondary" hidden type="button" onclick="logout()">退出登录</button></div></div>
+</header>
+<section class="login-view" id="loginPanel" aria-labelledby="loginHeading">
+<div class="login-story"><p class="eyebrow">AI · OPERATIONS · SAFETY</p><h2>让每一步运维操作<br>都有依据、有边界。</h2><p>从理解任务、生成计划，到审批与结果核验，在清晰的流程中完成操作。</p><div class="login-flow"><div class="login-flow-item"><span>01</span><div><strong>描述目标，生成计划</strong><p>把任务分成可核对的操作步骤</p></div></div><div class="login-flow-item"><span>02</span><div><strong>检查风险，确认权限</strong><p>低风险查询自动继续，变更等待审批</p></div></div><div class="login-flow-item"><span>03</span><div><strong>执行操作，保留证据</strong><p>在已配置的执行环境中核对结果</p></div></div></div></div>
+<div class="login-card"><h2 id="loginHeading">登录工作台</h2><p class="login-intro">欢迎回来。使用你的运维账号继续。</p>
+<form id="loginForm" class="login-form" onsubmit="return submitLogin(event)" novalidate>
+<div class="login-field"><label for="loginUser">用户名</label><input id="loginUser" name="username" autocomplete="username" maxlength="40" aria-describedby="loginMessage" placeholder="请输入用户名" required></div>
+<div class="login-field"><label for="loginPassword">密码</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" maxlength="256" aria-describedby="loginMessage" placeholder="请输入密码" required></div>
+<p id="loginMessage" class="login-message" role="status" aria-live="polite">身份和权限由登录账号确定。</p>
+<div class="login-actions"><button id="loginButton" type="submit">登录</button></div>
+<p id="loginConnectionHelp" class="login-help" hidden>请先双击项目中的 run-local-app.bat 启动服务，再 <a href="http://127.0.0.1:8765/">打开本地控制台</a>。不要直接打开 HTML 文件。</p>
+</form><p class="login-security-note">每个新标签页独立登录，可分别使用操作员和审批员账号。刷新本页会保留登录。<br>账号权限由服务端验证 · 登录后显示当前执行模式</p></div>
+</section>
+
+<main id="workspace" class="workspace" hidden>
+<aside class="sidebar" aria-label="功能导航"><div class="nav-caption">工作空间</div><nav class="nav-links">
+<a href="#task" data-view="task" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span>任务工作台</span></a>
+<a href="#approvals" data-view="approvals"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span>审批中心</span></a>
+<a href="#tools" data-view="tools"><svg class="icon" aria-hidden="true"><use href="#i-tool"/></svg><span>工具调试</span></a>
+<a href="#records" data-view="records"><svg class="icon" aria-hidden="true"><use href="#i-record"/></svg><span>活动记录</span></a>
+</nav><div class="sidebar-note"><span class="status-dot"></span><strong>安全控制已启用</strong><p id="backendNote">连接后显示当前执行环境。</p></div></aside>
+<div class="workspace-shell">
+<div class="page-heading"><div><h2 id="viewTitle">任务工作台</h2><p id="viewSubtitle">描述目标，审阅计划，按证据完成任务。</p></div><div class="model-connection"><span id="modelStatus" class="model-status" role="status">正在读取模型配置…</span><p id="modelConfigNote" class="model-config-note" role="status"></p></div></div>
+<div id="globalNotice" class="global-notice" role="status" aria-live="polite" hidden><p id="globalNoticeText"></p><button type="button" class="text-button" aria-label="关闭提示" onclick="showNotice('')">×</button></div>
+<div id="workspaceContent" class="workspace-content" data-view="task">
+<div class="view-stack">
+<section id="view-task" class="app-view">
+<section class="card composer" aria-labelledby="taskHeading"><div class="section-heading"><div><h2 id="taskHeading">新建运维任务</h2><p id="taskModeDescription">描述目标和操作限制，助手会规划下一步。</p></div><span class="section-tag">任务助手</span></div>
+<label for="taskRequest">你想完成什么？</label><textarea id="taskRequest" data-lock oninput="resetTask()" placeholder="例如：排查 nginx 健康检查异常，先检查，不要重启或修改配置。"></textarea>
+<div class="compose-footer"><label class="autonomy-option"><input id="taskAutonomy" type="checkbox" checked onchange="resetTask()"><span>允许自动完成范围内的低风险查询</span></label><button id="taskCreateButton" data-lock type="button" onclick="runTask('start')">创建任务 <span aria-hidden="true">→</span></button></div>
+<div id="taskClarification" class="clarification-panel" hidden><label for="taskAnswer">补充任务信息</label><div class="clarification-row"><input id="taskAnswer" data-lock maxlength="1000" placeholder="填写助手需要确认的信息"><button data-lock type="button" onclick="runTask('reply')">提交补充</button></div></div>
+</section>
+<section id="taskWorkspace" class="card task-board" aria-label="任务执行工作区"><div class="board-heading"><div class="board-title"><h2>任务进度</h2><p>已执行 <strong id="completedCount">0</strong> 步 <span class="plan-count-label"><span class="separator">·</span> 当前计划 <span id="planCount">0</span> 项</span></p></div><span id="taskStage" class="stage-badge" role="status" aria-live="polite">等待新任务</span></div>
+<div id="taskResourceChips" class="resource-chips"></div>
+<div class="task-tabs" role="tablist" aria-label="查看任务信息">
+<button type="button" id="tab-plan" role="tab" data-task-tab="plan" aria-selected="true" aria-controls="task-panel-plan">执行计划</button>
+<button type="button" id="tab-conclusion" role="tab" data-task-tab="conclusion" aria-selected="false" aria-controls="task-panel-conclusion" tabindex="-1">诊断结论</button>
+<button type="button" id="tab-analysis" role="tab" data-task-tab="analysis" aria-selected="false" aria-controls="task-panel-analysis" tabindex="-1">分析说明</button>
+<button type="button" id="tab-evidence" role="tab" data-task-tab="evidence" aria-selected="false" aria-controls="task-panel-evidence" tabindex="-1">执行证据</button>
+</div>
+<div id="taskAlert" class="task-alert" role="status"></div>
+<div id="task-panel-plan" role="tabpanel" aria-labelledby="tab-plan"><div id="planTimeline" class="plan-timeline"><div class="empty-state"><span class="empty-symbol">↗</span><h3>从一个明确的目标开始</h3><p>创建任务后，操作计划会逐步显示在这里。</p></div></div><p id="taskNextAction" class="next-action"></p>
+<div id="taskDiagnosticPanel" class="error-panel" hidden><h3>需要处理的问题</h3><pre id="taskDiagnostic"></pre></div></div>
+<div id="task-panel-conclusion" role="tabpanel" aria-labelledby="tab-conclusion" hidden><div id="diagnosticAssessment"><div class="assessment-section"><h3><span class="category-dot green"></span>已观察事实</h3><div id="conclusionFacts"></div></div><div class="assessment-section"><h3><span class="category-dot amber"></span>待验证线索</h3><div id="conclusionHypotheses"></div></div><div class="assessment-section"><h3><span class="category-dot gray"></span>仍无法确认</h3><div id="conclusionUnknowns"></div></div></div></div>
+<div id="task-panel-analysis" role="tabpanel" aria-labelledby="tab-analysis" hidden><h3 class="panel-intro">助手的分析与建议</h3><ol id="taskNarrative" class="narrative-list"><li>任务分析会显示在这里。</li></ol></div>
+<div id="task-panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden><div id="taskResourceDefaults" class="resource-chips evidence-defaults" aria-label="本任务采用的默认参数"></div><div id="evidenceRows"><div class="empty-state">执行后可核对每一步的来源、时间和返回内容。</div></div></div>
+<div class="board-actions"><div class="actions"><button id="taskRunButton" data-lock type="button" onclick="startAutoTask()" disabled>启动自主执行</button><button id="taskStopButton" class="danger" type="button" onclick="stopAutoTask()" disabled>停止任务</button></div><button id="taskContinueButton" data-lock class="secondary" type="button" onclick="runTask('continue')" disabled>继续分析</button></div>
+</section></section>
+<section id="view-approvals" class="app-view" hidden><section id="reviewPanel" class="card" hidden><div class="section-heading"><div><h2>待审批操作</h2><p>核对具体目标和申请原因，再决定是否批准。</p></div><button class="secondary" type="button" onclick="loadReviewQueue()">刷新队列</button></div><div id="reviewQueue"></div><p id="reviewMessage" class="notice" role="status"></p></section><div id="approvalAccessHint" class="card"><h2>当前账号没有审批权限</h2><p>请在新标签页登录审批员或管理员账号。</p></div><p class="view-hint">审批资格由登录账号决定，申请人不能批准自己的操作。</p></section>
+<section id="view-tools" class="app-view" hidden><section id="advancedDebug"><section id="singleToolSection" class="card" aria-labelledby="requestHeading"><div class="section-heading"><div><h2 id="requestHeading">单步调试</h2><p>单独测试一次查询或操作；日常多步骤任务请使用上方任务工作台。</p></div></div>
+<div class="mode-switch" role="group" aria-label="选择输入方式"><button id="naturalModeButton" class="mode-button" data-lock type="button" aria-pressed="true" aria-controls="naturalInputPanel" onclick="setMode('natural')">自然语言</button><button id="debugModeButton" class="mode-button" data-lock type="button" aria-pressed="false" aria-controls="manualInputPanel" onclick="setMode('manual')">调试模式</button></div>
+<div id="naturalInputPanel" aria-labelledby="naturalModeButton"><label for="naturalRequest">输入自然语言</label><textarea id="naturalRequest" data-lock>查看nginx最近两行错误日志</textarea><div class="request-actions"><button id="interpretButton" data-lock type="button" onclick="interpretRequest()">分析并检查</button><a href="#candidateSection">核对操作与结果 ↑</a></div></div>
+<div id="manualInputPanel" hidden aria-labelledby="debugModeButton"><div class="manual-form-grid"><div><label for="manualTool">工具</label><select id="manualTool" data-lock><option value="read_log">查看日志</option><option value="check_disk">查看磁盘</option><option value="get_service_status">查看服务状态</option><option value="restart_service">模拟重启服务</option><option value="update_config">模拟修改配置</option></select></div><div>
+<div id="serviceFields" hidden><label for="serviceName">服务</label><select id="serviceName" data-lock><option value="nginx">nginx</option><option value="payment">payment</option><option value="api">api</option></select></div>
+<div id="logFields"><label for="logPath">日志虚拟路径</label><input id="logPath" data-lock value="/var/log/nginx/error.log"><label for="logLines">最近多少行？（1～200）</label><input id="logLines" data-lock type="number" min="1" max="200" step="1" value="2"></div>
+<div id="configFields" hidden><label for="configPath">配置虚拟路径</label><input id="configPath" data-lock value="/etc/nginx/conf.d/site.conf"><label for="configContent">新配置内容</label><textarea id="configContent" data-lock maxlength="10000">server_tokens off;</textarea></div><p id="diskHint" class="hint" hidden>此查询不需要参数。</p></div></div><div class="actions"><button id="manualCandidateButton" data-lock type="button" onclick="generateManualCandidate()">生成并检查</button><a href="#candidateSection">核对操作与结果 ↑</a></div></div>
+<div class="request-actions shared-role"><div class="role-control"><label for="role">模拟角色</label><select id="role" data-lock><option value="viewer">只读用户</option><option value="operator">运维操作员</option><option value="admin">管理员</option></select></div></div><p id="analysisMessage" class="notice" role="status" aria-live="polite">一次点击完成候选生成与权限检查，不会自动执行。</p></section>
+</section></section>
+<section id="view-records" class="app-view" hidden><section id="advancedMode" class="card records-board"><div class="section-heading"><div><h2>活动与审计</h2><p>查看已记录的操作、审批和审计信息。</p></div><div class="actions"><button id="refreshButton" data-lock class="secondary" type="button" onclick="runAction('status',()=>refreshStatus(true))">刷新记录</button><button id="auditButton" data-lock class="secondary" type="button" onclick="verifyAudit()">校验审计链</button></div></div>
+<div id="recordsMetrics" class="records-metrics"></div><p id="systemStatus" class="hint" role="status">正在加载记录…</p>
+<div class="task-tabs record-tabs" role="tablist" aria-label="查看活动数据"><button role="tab" type="button" id="record-tab-summary" data-record-tab="summary" aria-selected="true" aria-controls="record-panel-summary" onclick="showRecordTab('summary')">活动列表</button><button role="tab" type="button" id="record-tab-raw" tabindex="-1" data-record-tab="raw" aria-selected="false" aria-controls="record-panel-raw" onclick="showRecordTab('raw')">原始数据</button><button role="tab" type="button" id="record-tab-recovery" tabindex="-1" data-record-tab="recovery" aria-selected="false" aria-controls="record-panel-recovery" onclick="showRecordTab('recovery')">操作恢复</button></div>
+<div id="record-panel-summary" role="tabpanel" aria-labelledby="record-tab-summary"><div id="recordsRows"></div></div>
+<div id="record-panel-raw" role="tabpanel" aria-labelledby="record-tab-raw" hidden><div class="data-block"><h3>本任务的原始执行证据</h3><pre id="taskEvidenceData">暂无执行证据。</pre></div><div class="data-block"><h3>当前候选</h3><p class="hint">有效期至 <span id="candidateExpiry">暂无候选</span></p><pre id="candidateJson">暂无候选。</pre><div class="actions"><button id="checkButton" data-lock class="secondary" type="button" onclick="checkCall()" disabled>重新检查权限</button></div><label for="requestId">审批申请 ID</label><input id="requestId" readonly placeholder="暂无审批申请"></div><div class="data-block"><h3>分析与权限检查</h3><pre id="feedbackDetails">等待操作…</pre></div><div class="data-block"><h3>实际执行</h3><pre id="executionOutput">暂无执行结果。</pre></div></div>
+<div id="record-panel-recovery" role="tabpanel" aria-labelledby="record-tab-recovery" hidden><h3>恢复一次本地模拟变更</h3><p>提交前请核对操作记录。真实只读查询没有回滚动作。</p><label for="operationId">需要恢复的操作 ID</label><input id="operationId" data-lock placeholder="填写已记录的操作 ID"><div id="rollbackControls" class="rollback-controls" hidden><button id="rollbackButton" data-lock class="danger" type="button" onclick="rollbackOperation()" disabled>回滚本次本地变更</button><p class="hint">仅恢复当前可回滚的模拟操作，不是生产自动恢复。</p></div></div>
+</section></section></div>
+<aside id="operationRail" class="operation-rail" aria-label="当前操作与执行结果"><section id="candidateSection" class="card" aria-labelledby="candidateHeading">
+<div class="section-heading"><div><h2 id="candidateHeading">当前操作</h2><p>执行前核对目标与权限。</p></div></div>
+<div id="candidateEmpty" class="empty">创建任务或分析单步需求后，待执行的工具、参数和风险会显示在这里。</div>
+<div id="candidateSummary" hidden><dl class="summary-grid"><dt>工具</dt><dd id="candidateTool"></dd><dt>操作内容</dt><dd id="candidateArguments"></dd><dt>风险</dt><dd><span id="candidateRisk" class="risk"></span></dd></dl><p id="candidateSource" class="hint"></p></div>
+<p id="candidateStatus" class="hint" role="status" aria-live="polite">没有可提交的候选。</p>
+<div class="actions"><button id="executeButton" data-lock class="secondary" type="button" onclick="executeCall()" disabled>确认执行</button></div>
+<div id="approvalPanel" class="approval-panel" hidden aria-labelledby="approvalHeading"><h3 id="approvalHeading">此操作需要他人审批</h3><p class="approval-account-note">请由另一位有权限的用户审批，获批后再执行。</p>
+<div class="row"><div><label for="requester">申请人</label><input id="requester" data-lock value="operator-alice"></div><div><label for="reason">申请原因</label><input id="reason" data-lock value="运维操作确认"></div></div>
+<div class="actions"><button id="requestApprovalButton" data-lock class="warn" type="button" onclick="requestApproval()" disabled>提交审批申请</button></div>
+<div class="legacy-approval-controls"><div class="row"><div><label for="approver">审批人</label><input id="approver" data-lock value="admin-bob"></div><div><label for="approverRole">审批角色</label><select id="approverRole" data-lock aria-describedby="approvalRoleHint"><option value="admin">管理员</option><option value="approver">审批员</option></select></div></div><p id="approvalRoleHint" class="hint">仅管理员或审批员可批准；审批员不是运维操作员，申请人不能自批。</p></div>
+<div class="actions"><button id="approveButton" data-lock class="warn" type="button" onclick="approveRequest()" disabled>批准本次操作</button></div><p id="approvalStatus" class="notice" role="status" aria-live="polite">尚未申请审批。</p></div>
+</section>
+<section class="card" aria-labelledby="resultHeading"><div class="section-heading"><div><h2 id="resultHeading">执行结果</h2><p></p></div></div>
+<div class="result-block"><h3 id="feedbackHeading">分析与检查</h3><p id="feedbackMessage" class="notice" role="status" aria-live="polite">尚未分析。这里的判断不代表工具已执行。</p></div>
+<div class="result-block"><h3 id="executionHeading">实际执行</h3><p id="executionStatus" class="result-status" role="status" aria-live="polite">尚未提交执行。</p><p id="executionSummary" class="hint">执行后，这里会显示实际查询内容、来源或本地模拟变更结果。</p></div>
+</section>
+<div class="rail-link"><button class="text-button" type="button" onclick="WorkbenchUI.showView('records')">查看活动记录与恢复操作 →</button></div></aside>
+</div><div class="environment-strip"><span id="backendResources"></span></div></div>
+<div hidden aria-hidden="true" id="compatibilityState"><span id="resourceScope"></span><span id="taskMessage"></span><span id="taskPlan"></span><span id="taskScope"></span><span id="taskRemaining"></span><span id="taskEvidence"></span><span id="diagnosticFacts"></span><span id="diagnosticHypotheses"></span><span id="diagnosticUnknowns"></span><span id="approvalCount"></span><span id="operationCount"></span><span id="auditCount"></span><span id="records"></span></div>
+</main>
+
+<script src="/assets/workbench.js"></script>
+<script>
+'use strict';
+
+const $ = id => document.getElementById(id);
+const presentation = window.WorkbenchUI;
+let consoleTabId = '';
+function getConsoleTabId() {
+  if (consoleTabId) return consoleTabId;
+  try { consoleTabId = window.sessionStorage.getItem('ops_console_tab') || ''; } catch (_) {}
+  if (!/^[a-f0-9]{32}$/.test(consoleTabId)) {
+    const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+    consoleTabId = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+    try { window.sessionStorage.setItem('ops_console_tab', consoleTabId); } catch (_) {}
+  }
+  return consoleTabId;
+}
+const sessionState = {authenticated: false, csrf: '', username: '', role: ''};
+let executionBackend = 'sandbox';
+let loginBusy = false;
+let sessionGeneration = 0;
+const taskUI = {id: '', candidateId: '', canContinue: false, running: false, status:'new', runnerState:'idle'};
+let taskPollBusy = false;
+
+function applySession(data) {
+  const enteringWorkspace=Boolean(data.authenticated) && !sessionState.authenticated;
+  Object.assign(sessionState, data);
+  presentation.applySession(data);
+  $('loginPanel').hidden = Boolean(data.authenticated);
+  $('workspace').hidden = !data.authenticated;
+  $('logoutButton').hidden = !data.authenticated;
+  $('sessionBar').hidden = !data.authenticated;
+  $('currentUser').textContent = data.authenticated ? data.username + ' · ' + data.role : '';
+  if (data.authenticated) {
+    $('role').value = data.role;
+    $('requester').value = data.username;
+    $('requester').readOnly = true;
+    $('approver').value = data.username;
+    $('approver').readOnly = true;
+    document.querySelectorAll('.role-control').forEach(el => {el.hidden = true;});
+    $('approverRole').hidden = true;
+    $('approveButton').textContent = '刷新审批结果';
+    $('reviewPanel').hidden = !['admin','approver'].includes(data.role);
+    $('approvalAccessHint').hidden = ['admin','approver'].includes(data.role);
+  }
+  if (enteringWorkspace && typeof window.scrollTo==='function') window.scrollTo({top:0,behavior:'instant'});
+}
+
+async function loadSession() {
+  const generation = ++sessionGeneration;
+  if (window.location && window.location.protocol === 'file:') {
+    showLoginMessage('当前是文件预览，无法登录。请通过本地控制台地址访问。','error',true);
+    $('loginButton').disabled = true;
+    return;
+  }
+  try {
+    const data = await api('/api/session');
+    if (generation !== sessionGeneration) return;
+    applySession(data);
+    if (data.authenticated) {await refreshStatus(false); await loadReviewQueue(); await restoreOwnedTask();}
+    else if (data.accounts_configured === false) showLoginMessage('尚未配置账号。请由本机维护者先创建用户账号，再登录。');
+  } catch (error) { if (generation === sessionGeneration) showLoginMessage('无法连接本地控制台，请确认服务已启动后刷新页面。','error',true); }
+}
+
+function showLoginMessage(message, kind = 'info', connectionHelp = false) {
+  $('loginMessage').textContent = message;
+  $('loginMessage').dataset.kind = kind;
+  $('loginConnectionHelp').hidden = !connectionHelp;
+}
+
+function submitLogin(event) {
+  event.preventDefault();
+  return login();
+}
+
+async function login() {
+  if (loginBusy) return;
+  if (window.location && window.location.protocol === 'file:') {
+    showLoginMessage('文件预览无法连接后端，请打开本地控制台。','error',true);
+    return;
+  }
+  const username = $('loginUser').value.trim(), password = $('loginPassword').value;
+  if (!username || !password) {
+    showLoginMessage('请输入用户名和密码。','error');
+    return;
+  }
+  loginBusy = true;
+  sessionGeneration++;
+  $('loginButton').disabled = true;
+  $('loginButton').textContent = '登录中…';
+  $('loginUser').disabled = true;
+  $('loginPassword').disabled = true;
+  $('loginForm').setAttribute('aria-busy','true');
+  showLoginMessage('正在验证账号，请稍候…','loading');
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
+  try {
+    const data = await api('/api/login', 'POST', {username, password}, controller ? {signal:controller.signal} : {});
+    if (data.authenticated !== true) throw new Error('后端没有确认登录成功，请重试。');
+    $('loginPassword').value = '';
+    applySession(data);
+    showLoginMessage('登录成功。');
+    try {await refreshStatus(false); await loadReviewQueue(); await restoreOwnedTask();}
+    catch(error) {showFeedback('登录成功，但工作区初始化失败，可刷新后重试。',{error:error.message});}
+  } catch (error) {
+    const connection = error.name === 'AbortError' || error.name === 'TypeError';
+    showLoginMessage(error.name === 'AbortError' ? '连接超时，请确认本地服务已启动后重试。'
+      : connection ? '无法连接本地服务，请启动控制台后重试。' : error.message,'error',connection);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+    loginBusy = false;
+    $('loginButton').disabled = false;
+    $('loginButton').textContent = '登录';
+    $('loginUser').disabled = false;
+    $('loginPassword').disabled = false;
+    $('loginForm').setAttribute('aria-busy','false');
+  }
+}
+
+async function restoreOwnedTask() {
+  const data = await api('/api/tasks');
+  const task = (data.tasks || [])[0];
+  if (!task) {resetTask(); return;}
+  taskUI.id = task.task_id;
+  $('taskRequest').value = task.request;
+  await pollAutoTask();
+}
+
+async function logout() {
+  sessionGeneration++;
+  try { await api('/api/logout', 'POST', {}); }
+  finally {applySession({authenticated:false,csrf:'',username:'',role:''}); resetTask();}
+}
+
+async function loadReviewQueue() {
+  if (!sessionState.authenticated || !['admin','approver'].includes(sessionState.role)) return;
+  const data = await api('/api/status');
+  const queue = $('reviewQueue'); queue.textContent = '';
+  for (const item of data.approvals || []) {
+    if (item.status !== 'pending') continue;
+    const row = document.createElement('div'), button = document.createElement('button');
+    row.className='approval-card';
+    row.innerHTML=presentation.approvalMarkup(item);
+    button.textContent = item.requester === sessionState.username ? '不能自我审批' : '批准此操作';
+    button.disabled = item.requester === sessionState.username;
+    button.onclick = async () => {
+      button.disabled = true;
+      try {await api('/api/approvals/approve','POST',{request_id:item.request_id}); $('reviewMessage').textContent='审批已完成；等待中的自主任务将继续。'; await loadReviewQueue();}
+      catch(error) {$('reviewMessage').textContent=error.message; button.disabled=false;}
+    };
+    row.append(button); queue.append(row);
+  }
+  if (!queue.children.length) queue.innerHTML='<div class="empty-state"><span class="empty-symbol">✓</span><h3>暂无待审批操作</h3><p>新的审批申请会显示在这里。</p></div>';
+}
+
+async function startAutoTask() {
+  if (!taskUI.id) return;
+  await runAction('task', async () => {
+    const result = await api('/api/tasks/run','POST',{task_id:taskUI.id});
+    taskUI.running = true;
+    $('taskMessage').textContent = '任务已启动，低风险步骤将连续执行，变更会等待审批。';
+    await pollAutoTask();
+  });
+}
+
+async function stopAutoTask() {
+  if (!taskUI.id) return;
+  try {await api('/api/tasks/stop','POST',{task_id:taskUI.id}); $('taskMessage').textContent='已请求停止。正在执行的操作不会被强行中断；后续步骤将停止。'; showNotice($('taskMessage').textContent,'warning');}
+  catch(error) {$('taskMessage').textContent=error.message; showNotice('停止失败：'+error.message+'。不能确认后台已停止，请核对任务状态。','error');}
+}
+
+async function pollAutoTask() {
+  if (!sessionState.authenticated || !taskUI.id || taskPollBusy) return;
+  taskPollBusy = true;
+  try {
+    const result = await api('/api/tasks/state?task_id='+encodeURIComponent(taskUI.id));
+    taskUI.running = ['running','waiting_approval','stopping'].includes(result.runner_state);
+    renderTaskView(result);
+    if (result.actionable && result.candidate_id !== taskUI.candidateId) {
+      taskUI.candidateId = result.candidate_id;
+      acceptCandidate(result,'natural'); await checkCandidate(result);
+    }
+    if (result.approval_request_id) {state.requestId=result.approval_request_id; $('requestId').value=state.requestId;}
+    if (!result.actionable && !taskUI.running && state.candidate) invalidateCandidate('任务当前没有待执行候选。');
+    renderControls();
+    renderTaskExecution(result);
+    if ($('globalNotice').dataset.source==='poll') showNotice('');
+  } catch(error) {$('taskMessage').textContent='读取任务状态失败：'+error.message; showNotice($('taskMessage').textContent+'。后台可能仍在运行，请核对状态，避免重复提交。','error','poll');}
+  finally {taskPollBusy=false;}
+}
+
+function resetTask() {
+  if ($('globalNotice').dataset.source==='poll') showNotice('');
+  taskUI.id = ''; taskUI.candidateId = ''; taskUI.canContinue = false; taskUI.running = false;
+  taskUI.status='new'; taskUI.runnerState='idle';
+  $('taskStage').textContent='等待新任务';
+  $('taskScope').textContent=''; $('taskRemaining').textContent='';
+  $('taskDiagnosticPanel').hidden=true;
+  $('taskMessage').textContent = '任务输入已变化，请创建新任务。';
+  $('taskPlan').textContent = '';
+  $('taskEvidence').textContent = '暂无执行结果。';
+  presentation.resetTask();
+  $('diagnosticAssessment').hidden = false;
+  $('taskClarification').hidden = true;
+  invalidateCandidate('任务输入已变化，请重新创建任务。');
+}
+
+function renderTaskView(result) {
+  taskUI.status=result.task_status; taskUI.runnerState=result.runner_state || 'idle';
+  taskUI.canContinue=result.task_status==='observed' && !taskUI.running;
+  if (result.autonomy) $('taskAutonomy').checked=result.autonomy==='read_only';
+  const stages={new:'正在理解任务',clarify:'需要补充信息',propose:'计划已生成',observed:'本步已执行，等待继续分析',complete:'任务已完成',unsupported:'当前能力暂不支持',blocked:'任务已停止，请查看原因',limit:'已达到执行上限'};
+  const runnerStages={running:result.phase==='executing' ? '正在执行下一步' : result.phase==='authorizing' ? '正在检查执行权限' : '正在根据证据规划',waiting_approval:'等待另一位用户审批',stopping:'正在停止任务',stopped:'任务已停止'};
+  $('taskStage').textContent=runnerStages[result.runner_state] || stages[result.task_status] || '等待处理';
+  $('taskMessage').textContent=result.message + (result.runner_state==='waiting_approval' ? '\n已暂停：等待独立账号审批，获批后会自动继续。' : '');
+  $('taskPlan').textContent='已完成 '+result.steps_completed+' 步。\n'+(result.plan || []).map((item,i)=>(i+1)+'. '+item).join('\n');
+  const scope=result.scope || {};
+  $('taskScope').textContent=[scope.services && scope.services.length ? '任务服务：'+scope.services.join('、') : '',
+    scope.forbidden_tools && scope.forbidden_tools.length ? '本任务禁止：'+scope.forbidden_tools.map(name=>TOOLS[name] || name).join('、') : '',
+    ...(scope.defaults || [])].filter(Boolean).join('\n');
+  $('taskRemaining').textContent=(result.remaining_requirements || []).length ? '尚需完成：'+result.remaining_requirements.map(item=>(TOOLS[item.tool] || item.tool)+(item.target ? '（'+item.target+'）' : '')+(item.reason ? ' · '+item.reason : '')).join('；') : '';
+  $('taskEvidence').textContent=(result.observations || []).map((item,i)=>(i+1)+'. '+(TOOLS[item.tool] || item.tool)+(item.target ? ' · '+item.target : '')+'\n'+(item.observed_at ? '采集时间：'+item.observed_at+'\n' : '')+(item.source ? '来源：'+item.source+'\n' : '')+(item.result_excerpt || '')).join('\n\n') || '暂无执行结果。';
+  const assessment=result.diagnostic_assessment || {};
+  $('diagnosticAssessment').hidden=false;
+  $('diagnosticFacts').textContent=(assessment.confirmed || []).join('\n') || '尚无已采集事实。';
+  $('diagnosticHypotheses').textContent=(assessment.hypotheses || []).join('\n') || '暂无可支持的原因线索。';
+  $('diagnosticUnknowns').textContent=(assessment.unknowns || []).join('\n') || '请结合采集范围核对。';
+  $('taskClarification').hidden=result.task_status!=='clarify';
+  $('taskDiagnosticPanel').hidden=!result.diagnostic;
+  $('taskDiagnostic').textContent=result.diagnostic || '';
+  presentation.renderTask(result);
+}
+
+function renderTaskExecution(result) {
+  if (result.autonomy !== 'read_only' || !(result.observations || []).length) return;
+  const complete=result.task_status==='complete', count=result.steps_completed;
+  showExecution('自主任务已执行 '+count+' 步'+(complete ? '，任务已完成。' : '，请查看当前进度。'),
+    {executed:true,task_id:result.task_id,task_status:result.task_status,execution_backend:result.execution_backend,
+     task_observations:result.observations},complete ? 'success' : 'warning');
+  $('feedbackMessage').textContent=complete ? '自主任务已完成。实际查询与证据见下方结果及本任务证据区。' : '自主任务正在依据已获得的证据继续处理；已执行步骤见结果区。';
+}
+
+async function runTask(action) {
+  if (state.busy) return;
+  await runAction('task', async () => {
+    if (action === 'start') resetTask();
+    const body = action === 'start' ? {request: $('taskRequest').value.trim(), autonomy: sessionState.authenticated && $('taskAutonomy').checked ? 'read_only' : 'manual'}
+      : action === 'reply' ? {task_id: taskUI.id, answer: $('taskAnswer').value.trim()}
+      : {task_id: taskUI.id};
+    invalidateCandidate('正在规划任务的下一步……');
+    taskUI.canContinue = false;
+    $('taskMessage').textContent = '正在分析目标与已有证据，请稍候……';
+    $('taskStage').textContent = '正在理解目标与规划步骤';
+    presentation.renderTask({task_status:'planning',message:'正在生成计划，请稍候。',plan:[],observations:[],steps_completed:0});
+    const result = await api('/api/tasks/' + action, 'POST', body);
+    taskUI.id = result.task_id;
+    renderTaskView(result);
+    $('taskAnswer').value = '';
+    if (result.actionable === true) {
+      taskUI.candidateId = result.candidate_id;
+      acceptCandidate(result, 'natural');
+      await checkCandidate(result);
+      $('taskMessage').textContent += $('taskAutonomy').checked ? '\n请审阅计划，然后点击“启动自主执行”。需要审批时会自动暂停。' : '\n下一步已显示在下方，请核对参数、完成所需审批并确认执行。';
+    }
+    renderTaskExecution(result);
+  });
+}
+const TOOLS = Object.freeze({
+  read_log: '查看日志',
+  check_disk: '查看磁盘',
+  get_service_status: '查看服务状态',
+  restart_service: '模拟重启服务',
+  update_config: '模拟修改配置'
+});
+const RISK_LABELS = Object.freeze({
+  low: '低风险',
+  medium: '中风险',
+  high: '高风险',
+  critical: '禁止级风险'
+});
+const state = {
+  mode: 'natural',
+  candidate: null,
+  busy: false,
+  checked: false,
+  checkDecision: null,
+  requestId: '',
+  approvalToken: '',
+  operationId: '',
+  lastExecution: null,
+  sideEffectSubmitted: false
+};
+const maskedTokens = new Set();
+
+function redact(value) {
+  if (Array.isArray(value))
+    return value.map(redact);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, /token|secret|credential/i.test(key) ? '[敏感字段已隐藏]' : redact(item)]));
+  if (typeof value === 'string') {
+    for (const token of maskedTokens) value = value.split(token).join('[令牌已隐藏]');
+  }
+  return value;
+}
+
+function showFeedback(message, data = {}) {
+  $('feedbackMessage').textContent = redact(message);
+  $('feedbackDetails').textContent = JSON.stringify(redact(data), null, 2);
+  if (['records','approvals'].includes($('workspaceContent').dataset.view)) showNotice(message,data.error ? 'error' : 'info');
+}
+
+function showNotice(message,kind='info',source='general') {
+  $('globalNoticeText').textContent=redact(message);
+  $('globalNotice').dataset.kind=kind;
+  $('globalNotice').dataset.source=source;
+  $('globalNotice').hidden=!message;
+}
+
+function executionSummary(data) {
+  if (data.status === 'submitted')
+    return '正在等待后端响应，尚未确认执行完成。';
+  if (data.status === 'rolled_back')
+    return '本次本地变更已完成一次恢复。';
+  if (data.executed === false)
+    return '调用未执行。' + (data.decision && data.decision.reasons || []).join('；');
+  if (data.error)
+    return '发生异常，请核对操作记录与本地状态。';
+  if (Array.isArray(data.task_observations)) {
+    const observations=data.task_observations, last=observations[observations.length-1] || {};
+    return '已执行：'+observations.map(item=>TOOLS[item.tool] || item.tool).join(' → ')
+      +(data.execution_backend==='local_readonly' ? '\n本轮为真实只读采集，未执行修复。' : '\n服务与配置操作使用本地模拟环境。')
+      +(last.source ? '\n最近来源：'+last.source : '')+(last.observed_at ? '\n最近采集时间：'+last.observed_at : '');
+  }
+  const result = data.operation && data.operation.result || {},
+    tool = data.decision && data.decision.tool;
+  if (result.backend === 'local_readonly') {
+    const provenance='\n来源：'+result.source+'\n采集时间：'+result.observed_at+(result.truncated ? '\n结果已截断，仅依据当前片段。' : '');
+    if (tool==='get_service_status') return '服务：'+result.name+'\n健康接口：'+(result.http_status ? 'HTTP '+result.http_status : result.status)+'\n耗时：'+result.latency_ms+' ms\n仅表示接口探测结果，不能据此确认全部业务或进程状态。'+provenance;
+    if (tool==='read_log') return (result.available ? '读取的真实日志：\n'+result.content : '日志本次不可用：'+(result.error || '未获得内容'))+provenance;
+  }
+  if (tool === 'read_log')
+    return '读取的日志：\n' + (Array.isArray(result.lines) ? result.lines.join('\n') : '未返回日志');
+  if (tool === 'check_disk') {
+    const gb = value => (Number(value) / 1073741824).toFixed(2) + ' GiB';
+    return '磁盘总容量：' + gb(result.total) + '\n已使用：' + gb(result.used) + '\n剩余：' + gb(result.free);
+  }
+  if (tool === 'get_service_status' || tool === 'restart_service')
+    return '服务：' + result.name + '\n本地模拟状态：' + result.status + '\n模拟重启次数：' + result.restart_count;
+  if (tool === 'update_config')
+    return '本地配置：' + result.path + '\n写入：' + result.bytes + ' 字节';
+  return '完整记录可在技术详情查看。';
+}
+
+function showExecution(message, data, kind = 'warning') {
+  state.lastExecution = {
+    message: redact(message),
+    data: redact(data),
+    kind
+  };
+  $('executionStatus').textContent = state.lastExecution.message;
+  $('executionStatus').dataset.kind = kind;
+  $('executionSummary').textContent = redact(executionSummary(data));
+  $('executionOutput').textContent = JSON.stringify(state.lastExecution.data, null, 2);
+  if (['records','approvals'].includes($('workspaceContent').dataset.view)) showNotice(message,kind);
+}
+
+function markPreviousExecution() {
+  if (state.lastExecution) {
+    $('executionStatus').textContent = '上次结果（不代表当前请求）：' + state.lastExecution.message;
+    $('executionStatus').dataset.kind = 'warning';
+  }
+}
+
+function expiryMs(value) {
+  if (typeof value === 'number')
+    return value < 1e12 ? value * 1000 : value;
+  if (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value))
+    return expiryMs(Number(value));
+  return Date.parse(value);
+}
+
+function candidateActive() {
+  return Boolean(state.candidate && state.candidate.expiresMs > Date.now());
+}
+
+function clearApproval() {
+  state.requestId = '';
+  state.approvalToken = '';
+  $('requestId').value = '';
+  $('approvalStatus').textContent = '尚未申请审批。凭证只保存在页面内存，不展示原始令牌。';
+}
+
+function invalidateCandidate(message = '输入已变化，请重新生成候选。') {
+  state.candidate = null;
+  state.checked = false;
+  state.checkDecision = null;
+  clearApproval();
+  state.operationId = '';
+  $('operationId').value = '';
+  $('candidateSummary').hidden = true;
+  $('candidateEmpty').hidden = false;
+  $('candidateStatus').textContent = message;
+  $('candidateJson').textContent = '';
+  $('candidateRisk').textContent = '';
+  $('candidateExpiry').textContent = '暂无候选';
+  markPreviousExecution();
+  renderControls();
+}
+
+function renderControls() {
+  $('taskRequest').disabled = state.busy || taskUI.running;
+  $('taskAutonomy').disabled = state.busy || taskUI.running;
+  $('taskCreateButton').disabled = state.busy || taskUI.running;
+  $('taskRunButton').disabled = state.busy || !taskUI.id || taskUI.running || !['propose','observed'].includes(taskUI.status) || ['stopped','blocked','limit'].includes(taskUI.runnerState) || !$('taskAutonomy').checked;
+  $('taskStopButton').disabled = !taskUI.id || !taskUI.running;
+  $('taskContinueButton').disabled = state.busy || !taskUI.canContinue;
+  const active = candidateActive(),
+    ready = active && state.checked,
+    natural = state.mode === 'natural';
+  const canExecute = !state.busy && !taskUI.running && ready
+    && (state.checkDecision === 'allow'
+    || state.checkDecision === 'require_human'
+    && Boolean(state.approvalToken));
+  $('naturalInputPanel').hidden = !natural;
+  $('manualInputPanel').hidden = natural;
+  $('naturalModeButton').setAttribute('aria-pressed', String(natural));
+  $('debugModeButton').setAttribute('aria-pressed', String(!natural));
+  $('naturalModeButton').disabled = state.busy;
+  $('debugModeButton').disabled = state.busy;
+  $('interpretButton').disabled = state.busy || !natural;
+  $('manualCandidateButton').disabled = state.busy || natural;
+  $('checkButton').disabled = state.busy || !active;
+  $('executeButton').disabled = !canExecute;
+  $('executeButton').dataset.ready = String(canExecute);
+  $('executeButton').title = canExecute ? '执行条件已满足，请核对操作内容后确认执行。' : '请完成权限检查和所需审批后再执行。';
+  $('requestApprovalButton').disabled = state.busy || !ready || state.checkDecision !== 'require_human'
+    || Boolean(state.requestId);
+  $('approveButton').disabled = state.busy || !active || !state.requestId
+    || Boolean(state.approvalToken);
+  $('approvalPanel').hidden = !(active
+    && (state.checked && state.checkDecision === 'require_human'
+    || state.requestId));
+  const canRollback = Boolean($('operationId').value.trim());
+  $('rollbackButton').disabled = state.busy || !canRollback;
+  $('rollbackControls').hidden = !canRollback;
+}
+
+function setBusy(busy) {
+  state.busy = busy;
+  document.querySelectorAll('[data-lock]').forEach(el => {
+    el.disabled = busy;
+  });
+  renderControls();
+}
+
+function setMode(mode) {
+  if (state.busy)
+    return false;
+  if (!['natural', 'manual'].includes(mode))
+    throw new Error('未知入口模式');
+  if (state.mode !== mode) {
+    state.mode = mode;
+    invalidateCandidate('已切换输入方式，旧候选与审批凭证已清除，请重新生成。');
+    $('analysisMessage').textContent = mode === 'manual'
+      ? '调试模式：生成候选后自动检查权限，不经模型，仍需人工审批。'
+      : '自然语言模式：一次点击完成分析与权限检查，不会执行工具。';
+    showFeedback('输入方式已切换。请重新生成并检查候选；尚未执行。');
+  }
+  renderControls();
+  return true;
+}
+
+function manualFields() {
+  const tool = $('manualTool').value;
+  $('serviceFields').hidden = !['get_service_status', 'restart_service'].includes(tool);
+  $('logFields').hidden = tool !== 'read_log';
+  $('configFields').hidden = tool !== 'update_config';
+  $('diskHint').hidden = tool !== 'check_disk';
+}
+
+function buildManualArguments() {
+  const tool = $('manualTool').value;
+  if (!Object.hasOwn(TOOLS, tool))
+    throw new Error('仅支持界面中的五类白名单工具');
+  if (tool === 'check_disk')
+    return {};
+  if (['get_service_status', 'restart_service'].includes(tool))
+    return {
+    name: $('serviceName').value
+  };
+  if (tool === 'read_log') {
+    const lines = Number($('logLines').value),
+      path = $('logPath').value.trim();
+    if (!path)
+      throw new Error('请填写日志路径');
+    if (!$('logLines').value.trim() || !Number.isInteger(lines) || lines < 1
+      || lines > 200)
+      throw new Error('日志行数必须为 1～200 的整数');
+    return {
+      path,
+      lines
+    };
+  }
+  const path = $('configPath').value.trim(),
+    content = $('configContent').value;
+  if (!path)
+    throw new Error('请填写配置路径');
+  if (content.length < 1 || content.length > 10000)
+    throw new Error('配置内容须为 1～10000 字符');
+  return {
+    path,
+    content
+  };
+}
+
+function describeArguments(tool, args) {
+  if (tool === 'check_disk')
+    return '查询本地沙箱所在磁盘的状态';
+  if (['get_service_status', 'restart_service'].includes(tool))
+    return '服务：' + args.name;
+  if (tool === 'read_log')
+    return '路径：' + args.path + '\n行数：' + args.lines;
+  return '路径：' + args.path + '\n新配置：\n' + args.content;
+}
+
+function acceptCandidate(result, source) {
+  if (!result.candidate_id || typeof result.candidate_id !== 'string'
+    || !Object.hasOwn(TOOLS, result.tool)
+    || !result.arguments
+    || typeof result.arguments !== 'object'
+    || Array.isArray(result.arguments))
+    throw new Error('后端未返回有效的服务器候选；不能检查或执行，请重新生成');
+  const expiresMs = expiryMs(result.expires_at);
+  if (!Number.isFinite(expiresMs) || expiresMs <= Date.now())
+    throw new Error('候选有效期无效或已过期，请重新生成');
+  const args = JSON.parse(JSON.stringify(result.arguments));
+  state.candidate = {
+    id: result.candidate_id,
+    tool: result.tool,
+    arguments: args,
+    risk: result.effective_risk,
+    expiresMs,
+    source
+  };
+  state.checked = false;
+  state.checkDecision = null;
+  clearApproval();
+  $('candidateEmpty').hidden = true;
+  $('candidateSummary').hidden = false;
+  $('candidateSource').textContent = source === 'natural'
+    ? result.candidate_source === 'offline_rules'
+    ? '离线只读规则（受限兜底）'
+    : '自然语言分析'
+    : '调试模式（不经模型、需审批）';
+  $('candidateTool').textContent = TOOLS[result.tool] + '（' + result.tool + '）';
+  $('candidateArguments').textContent = describeArguments(result.tool, args);
+  $('candidateRisk').textContent = RISK_LABELS[result.effective_risk] || '后端未返回风险等级';
+  $('candidateRisk').dataset.risk = result.effective_risk || '';
+  $('candidateExpiry').textContent = new Date(expiresMs).toLocaleString('zh-CN', {
+    hour12: false
+  });
+  $('candidateJson').textContent = JSON.stringify(redact({
+    tool: result.tool,
+    arguments: args,
+    candidate_id: result.candidate_id,
+    expires_at: result.expires_at,
+    effective_risk: result.effective_risk
+  }), null, 2);
+  $('candidateStatus').textContent = '候选已生成，正在自动检查权限；尚未执行。';
+  markPreviousExecution();
+  renderControls();
+}
+
+function requireCandidate() {
+  if (!candidateActive()) {
+    invalidateCandidate('候选不存在或已过期，请重新分析或生成。');
+    throw new Error('候选不存在或已过期，请重新生成');
+  }
+  return state.candidate;
+}
+
+function payload() {
+  const c = requireCandidate();
+  return {
+    candidate_id: c.id,
+    tool: c.tool,
+    arguments: JSON.parse(JSON.stringify(c.arguments)),
+    role: $('role').value
+  };
+}
+
+async function api(path, method = 'GET', body, requestOptions = {}) {
+  const options = {
+    ...requestOptions,
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Console-Tab': getConsoleTabId()
+    }
+  };
+  if (sessionState.authenticated) options.headers['X-CSRF-Token'] = sessionState.csrf;
+  if (sessionState.authenticated && body !== undefined) {
+    body = {...body};
+    for (const field of ['role','requester','approver','approver_role']) delete body[field];
+  }
+  if (body !== undefined)
+    options.body = JSON.stringify(body);
+  const response = await fetch(path, options);
+  let envelope;
+  try {
+    envelope = await response.json();
+  } catch (_) {
+    throw new Error('服务未返回有效 JSON，请检查本地服务状态');
+  }
+  if (!response.ok || !envelope.ok) {
+    if (response.status === 401) applySession({authenticated:false,csrf:''});
+    const error = new Error(envelope.error || '请求失败');
+    error.status = response.status;
+    throw error;
+  }
+  return envelope.data;
+}
+
+async function runAction(kind, fn) {
+  if (state.busy)
+    return;
+  state.sideEffectSubmitted = false;
+  setBusy(true);
+  try {
+    await fn();
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    showNotice(message,'error');
+    if (/candidate|候选/.test(message)
+      && /expir|过期|无效|不存在|missing|invalid|consum|已使用/i.test(message))
+      invalidateCandidate('候选失效，请重新生成；旧审批凭证已清除。');
+    if ((kind === 'execute' || kind === 'rollback')
+      && state.sideEffectSubmitted)
+      showExecution((kind === 'execute' ? '执行' : '回滚') + '可能部分完成，请核对状态和审计记录，勿重复提交。', {
+      error: message
+    }, 'error');
+    else
+      showFeedback((kind === 'execute' || kind === 'rollback' ? '尚未提交执行：' : '请求未完成：') + message, {
+      error: message,
+      ...(error.phase ? {
+        phase: error.phase
+      } : {})
+    });
+    if (kind === 'interpret' || kind === 'manual')
+      $('analysisMessage').textContent = redact('分析或权限检查未完成：' + message + '。当前不能执行。可重试，或在技术详情中重新检查已有候选。');
+  } finally {
+    setBusy(false);
+    if (kind !== 'status')
+      await refreshStatus(false);
+  }
+}
+
+async function checkCandidate(preparation) {
+  state.checked = false;
+  state.checkDecision = null;
+  renderControls();
+  try {
+    const candidateId = requireCandidate().id,
+      role = $('role').value;
+    const result = await api('/api/check', 'POST', payload());
+    if (requireCandidate().id !== candidateId || $('role').value !== role)
+      throw new Error('候选或角色已改变，检查结果不能用于当前调用');
+    if (!result
+      || !['allow', 'require_human', 'deny'].includes(result.decision))
+      throw new Error('后端未返回有效权限决策，不能执行');
+    if (result.tool && result.tool !== state.candidate.tool)
+      throw new Error('权限结果与候选工具不一致，不能执行');
+    if (result.effective_risk
+      && !Object.hasOwn(RISK_LABELS, result.effective_risk))
+      throw new Error('后端返回未知风险等级，不能执行');
+    const decision = result.decision;
+    if (decision !== 'require_human')
+      clearApproval();
+    if (result.effective_risk) {
+      state.candidate.risk = result.effective_risk;
+      $('candidateRisk').textContent = RISK_LABELS[result.effective_risk];
+      $('candidateRisk').dataset.risk = result.effective_risk;
+    }
+    state.checked = true;
+    state.checkDecision = decision;
+    const message = decision === 'allow'
+      ? '检查通过，但尚未执行。请核对操作内容后点击“确认执行”。'
+      : decision === 'require_human'
+      ? '检查结果：需要他人审批，当前未执行。'
+      : '检查结果：不允许执行。' + (result.reasons || []).join('；');
+    $('candidateStatus').textContent = message;
+    showFeedback(message, preparation ? {
+      preparation,
+      check: result
+    } : result);
+    renderControls();
+    return message;
+  } catch (error) {
+    state.checked = false;
+    state.checkDecision = null;
+    clearApproval();
+    $('candidateStatus').textContent = '权限检查未完成，不能执行。可重试或在技术详情中重新检查。';
+    renderControls();
+    error.phase = 'permission_check';
+    throw error;
+  }
+}
+
+async function interpretRequest() {
+  if (state.busy)
+    return;
+  setMode('natural');
+  const request = $('naturalRequest').value.trim();
+  invalidateCandidate('正在生成并检查新的候选……');
+  await runAction('interpret', async () => {
+    if (!request)
+      throw new Error('请先输入运维需求');
+    $('analysisMessage').textContent = '正在进行分析与权限检查，请稍候；工具不会自动执行。';
+    const result = await api('/api/interpret', 'POST', {
+      request
+    });
+    const message = result.message
+      || (result.actionable
+      ? '候选已生成。'
+      : '未生成工具调用：' + (result.reasons || []).join('；'));
+    if (result.actionable === true) {
+      acceptCandidate(result, 'natural');
+      $('analysisMessage').textContent = '候选已生成，正在自动检查权限；尚未执行。';
+      const checked = await checkCandidate(result);
+      $('analysisMessage').textContent = redact(message + '\n' + checked + (Array.isArray(result.recovery)
+        ? '\n' + result.recovery.join('\n')
+        : ''));
+    } else {
+      $('candidateStatus').textContent = '未生成可检查的候选，当前不能执行。';
+      $('analysisMessage').textContent = redact(message + (Array.isArray(result.recovery)
+        ? '\n' + result.recovery.join('\n')
+        : ''));
+      showFeedback('分析完成：没有可执行候选。', result);
+    }
+  });
+}
+
+async function generateManualCandidate() {
+  if (state.busy)
+    return;
+  if (!setMode('manual'))
+    return;
+  invalidateCandidate('正在生成并检查手动候选……');
+  await runAction('manual', async () => {
+    const result = await api('/api/candidates/manual', 'POST', {
+      tool: $('manualTool').value,
+      arguments: buildManualArguments()
+    });
+    acceptCandidate(result, 'manual');
+    $('analysisMessage').textContent = '手动候选已生成，正在自动检查权限；尚未执行。';
+    const message = await checkCandidate(result);
+    $('analysisMessage').textContent = '手动候选生成与权限检查已完成。' + message;
+  });
+}
+
+async function checkCall() {
+  await runAction('check', () => checkCandidate());
+}
+
+async function requestApproval() {
+  await runAction('approval', async () => {
+    if (!state.checked || state.checkDecision !== 'require_human')
+      throw new Error('请先检查候选；只有后端要求审批的调用才能申请');
+    const p = payload();
+    p.requester = $('requester').value.trim();
+    p.reason = $('reason').value.trim();
+    if (!p.requester || !p.reason)
+      throw new Error('请填写申请人和申请原因');
+    const result = await api('/api/approvals/request', 'POST', p);
+    if (typeof result.request_id !== 'string' || !result.request_id)
+      throw new Error('后端未返回有效审批申请 ID');
+    state.requestId = result.request_id;
+    state.approvalToken = '';
+    $('requestId').value = result.request_id;
+    $('approvalStatus').textContent = '审批申请已创建，等待另一人批准。工具尚未执行。';
+    showFeedback('已创建审批申请，不是执行结果。', result);
+  });
+}
+
+async function approveRequest() {
+  await runAction('approval', async () => {
+    if (sessionState.authenticated) {
+      const grant = await api('/api/approvals/grant','POST',{request_id:state.requestId});
+      if (!grant.approved) throw new Error('尚未获批，请由独立审批账号在审批队列处理');
+      state.approvalToken=grant.approval_token; maskedTokens.add(grant.approval_token);
+      $('approvalStatus').textContent='已取得属于当前用户的审批结果。';
+      renderControls(); return;
+    }
+    requireCandidate();
+    if (!state.requestId)
+      throw new Error('请先创建当前候选的审批申请');
+    const approver = $('approver').value.trim();
+    if (!approver)
+      throw new Error('请填写审批人');
+    if (approver === $('requester').value.trim())
+      throw new Error('申请人不能批准自己的操作');
+    const result = await api('/api/approvals/approve', 'POST', {
+      request_id: state.requestId,
+      approver,
+      approver_role: $('approverRole').value
+    });
+    if (typeof result.approval_token !== 'string' || !result.approval_token)
+      throw new Error('后端未签发有效审批凭证');
+    maskedTokens.add(result.approval_token);
+    state.approvalToken = result.approval_token;
+    $('approvalStatus').textContent = '已获批：一次性凭证已保存在页面内存，工具仍未执行。';
+    $('candidateStatus').textContent = '审批已完成。核对后可手动提交执行。';
+    showFeedback('审批完成，尚未执行；原始凭证不展示。', result);
+  });
+}
+
+async function executeCall() {
+  await runAction('execute', async () => {
+    if (!state.checked
+      || !(state.checkDecision === 'allow'
+      || state.checkDecision === 'require_human' && state.approvalToken))
+      throw new Error('请先检查候选，并完成所需审批');
+    const p = payload();
+    if (state.requestId && state.approvalToken) {
+      p.request_id = state.requestId;
+      p.approval_token = state.approvalToken;
+    }
+    invalidateCandidate('执行已提交，旧候选与审批凭证已清除。再次操作需重新生成。');
+    $('feedbackMessage').textContent = '分析与检查阶段已完成。执行状态见下方，技术记录保留在技术详情区。';
+    showExecution('正在提交本地执行请求，请等待后端结果。', {
+      status: 'submitted'
+    }, 'warning');
+    state.sideEffectSubmitted = true;
+    const result = await api('/api/execute', 'POST', p);
+    if (result.executed === true) {
+      if (p.candidate_id === taskUI.candidateId) {
+        taskUI.canContinue = true;
+        $('taskMessage').textContent = '这一步已执行。点击“根据执行结果继续分析”，助手会判断下一步或给出结论。';
+      }
+      const operation = result.operation || {};
+      if (operation.rollback_available && operation.operation_id) {
+        state.operationId = operation.operation_id;
+        $('operationId').value = operation.operation_id;
+      }
+      showExecution('后端确认：已完成本地工具执行。', result, 'success');
+    } else if (result.executed === false)
+      showExecution('后端确认：未执行（拒绝或仍需审批）。', result, 'warning');
+    else
+      throw new Error('后端未明确返回 executed 状态，需核对操作记录');
+  });
+}
+
+async function rollbackOperation() {
+  await runAction('rollback', async () => {
+    const operationId = $('operationId').value.trim();
+    if (!operationId)
+      throw new Error('请填写可回滚的操作 ID');
+    state.operationId = '';
+    $('operationId').value = '';
+    state.sideEffectSubmitted = true;
+    const result = await api('/api/rollback', 'POST', {
+      operation_id: operationId
+    });
+    if (result.status === 'rolled_back')
+      showExecution('后端确认：已完成一次本地变更回滚。', result, 'success');
+    else
+      showExecution('回滚请求已返回，未确认恢复成功。', result, 'warning');
+  });
+}
+
+async function verifyAudit() {
+  await runAction('audit', async () => {
+    const result = await api('/api/audit/verify');
+    showFeedback('审计链校验完成（不是工具执行）。', result);
+  });
+}
+
+async function refreshStatus(display = true) {
+  try {
+    const result = await api('/api/status'),
+      approvals = Array.isArray(result.approvals) ? result.approvals : [],
+      operations = Array.isArray(result.operations) ? result.operations : [];
+    executionBackend=result.execution_backend || 'sandbox';
+    const real=executionBackend==='local_readonly', resources=result.execution_resources || {};
+    $('executionBadge').textContent = real ? '真实只读' : '本地模拟';
+    presentation.setBackend(result);
+    presentation.renderRecords(result);
+    $('taskModeDescription').textContent=real ? '助手会按实际健康检查和日志证据继续诊断；当前模式仅允许查询。' : '助手会拆解步骤，根据执行结果继续分析；变更操作暂停等待审批。';
+    $('resourceScope').textContent=real ? '已配置服务：'+(resources.services || []).join('、')+'；可读取日志：'+((resources.log_paths || []).join('、') || '未配置')+'。仅采集本机资源，不执行变更。' : '服务和配置操作在本地模拟环境中进行。';
+    $('backendNote').textContent=real ? '健康接口和日志为真实本机采集；查询结果不代表已经完成修复。' : '服务和配置操作在本地模拟环境中进行。';
+    document.querySelectorAll('#manualTool option').forEach(option=>{if (['restart_service','update_config'].includes(option.value)) option.disabled=real;});
+    const model = result.natural_language || {};
+    const labels={deepseek:'DeepSeek API',openai_compatible:'兼容 API',ollama:'本地 Ollama'};
+    $('modelStatus').textContent = model.provider
+      ? '当前生效：' + (labels[model.provider] || '模型服务') + ' · ' + (model.model || '未提供模型名')
+        + (model.endpoint_host ? ' · ' + model.endpoint_host : '')
+      : '尚未获取模型配置。';
+    const configNote=$('modelConfigNote');
+    configNote.dataset.kind='info';
+    if (model.configuration_state==='restart_required') {
+      configNote.textContent='检测到配置变更，重启后端后生效；当前仍使用上方配置。';
+      configNote.dataset.kind='warning';
+    } else if (model.configuration_state==='invalid_update') {
+      configNote.textContent='新配置无效，当前仍使用已加载配置；请检查后重启。';
+      configNote.dataset.kind='warning';
+    } else if (model.api_key_configured===false) {
+      configNote.textContent='未配置密钥，请在后端设置 '+(model.provider==='openai_compatible' ? 'LLM_API_KEY' : 'DEEPSEEK_API_KEY')+'，然后重启后端。';
+      configNote.dataset.kind='warning';
+    } else {
+      configNote.textContent=model.provider ? '配置已加载；修改后需重启后端。配置状态不代表连接已验证。' : '请检查后端配置并刷新页面。';
+    }
+    $('approvalCount').textContent = approvals.length;
+    $('operationCount').textContent = operations.length;
+    $('auditCount').textContent = result.audit && result.audit.count !== undefined
+      ? result.audit.count
+      : '-';
+    const rows = [
+      ...approvals.slice(0, 4).map(item => '审批 ' + item.request_id + ' · ' + item.tool + ' · ' + item.status),
+      ...operations.slice(0, 4).map(item => '操作 ' + item.operation_id + ' · ' + item.tool + ' · ' + item.status)
+    ];
+    $('records').textContent = redact(rows.join('\n') || '暂无记录');
+    $('systemStatus').textContent = '本地状态已刷新。以下为历史记录，不代表当前请求执行成功。';
+    if (display)
+      showFeedback('系统记录已刷新（不是执行结果）。', result);
+  } catch (error) {
+    $('modelStatus').textContent='模型配置暂无法读取。';
+    $('modelConfigNote').textContent='请检查后端连接；当前生效配置尚未确认。';
+    $('modelConfigNote').dataset.kind='warning';
+    $('systemStatus').textContent = redact('状态刷新失败：' + error.message);
+    if (display)
+      throw error;
+  }
+}
+$('advancedMode').addEventListener('toggle', () => {
+  renderControls();
+});
+$('naturalRequest').addEventListener('input', () => {
+  if (!state.busy && state.mode === 'natural')
+    invalidateCandidate('自然语言请求已修改，请重新分析。');
+});
+for (const id of ['manualTool', 'serviceName', 'logPath', 'logLines', 'configPath', 'configContent']) $(id).addEventListener(id === 'manualTool' || id === 'serviceName' ? 'change' : 'input', () => {
+  if (!state.busy) {
+    manualFields();
+    if (state.mode === 'manual')
+      invalidateCandidate('手动参数已修改，请重新生成候选。');
+  }
+});
+$('role').addEventListener('change', () => {
+  if (!state.busy)
+    invalidateCandidate('模拟角色已改变，请重新生成候选并检查权限。');
+});
+$('requester').addEventListener('input', () => {
+  if (!state.busy) {
+    clearApproval();
+    renderControls();
+  }
+});
+for (const id of ['approver', 'approverRole']) $(id).addEventListener(id === 'approver' ? 'input' : 'change', () => {
+  if (!state.busy && state.approvalToken) {
+    state.approvalToken = '';
+    $('approvalStatus').textContent = '审批人信息已变化，旧凭证已清除。请重新申请审批。';
+    state.requestId = '';
+    $('requestId').value = '';
+    renderControls();
+  }
+});
+$('operationId').addEventListener('input', () => {
+  state.operationId = $('operationId').value.trim();
+  renderControls();
+});
+setInterval(() => {
+  if (!state.busy && state.candidate && !candidateActive())
+    invalidateCandidate('候选已过期，请重新生成；旧审批凭证已清除。');
+}, 1000);
+window.opsConsole = Object.freeze({
+  getState: () => ({
+    mode: state.mode,
+    busy: state.busy,
+    candidate: state.candidate ? JSON.parse(JSON.stringify(state.candidate)) : null,
+    checked: state.checked,
+    checkDecision: state.checkDecision,
+    requestId: state.requestId,
+    hasApprovalToken: Boolean(state.approvalToken),
+    operationId: state.operationId
+  }),
+  buildManualArguments,
+  login,
+  submitLogin,
+  runTask,
+  resetTask,
+  startAutoTask,
+  pollAutoTask,
+  payload,
+  invalidateCandidate,
+  setMode,
+  interpretRequest,
+  generateManualCandidate,
+  checkCall,
+  requestApproval,
+  approveRequest,
+  executeCall,
+  rollbackOperation
+});
+presentation.init(document);
+manualFields();
+renderControls();
+loadSession();
+setInterval(() => {if (taskUI.running) pollAutoTask();}, 1500);
+let modelRefreshBusy=false;
+setInterval(async()=>{
+  if (!sessionState.authenticated || state.busy || modelRefreshBusy) return;
+  modelRefreshBusy=true;
+  try {await refreshStatus(false);} finally {modelRefreshBusy=false;}
+},15000);
+
+function showRecordTab(key) {
+  if (!['summary','raw','recovery'].includes(key)) return;
+  for (const name of ['summary','raw','recovery']) {
+    $('record-panel-'+name).hidden=name!==key;
+    $('record-tab-'+name).setAttribute('aria-selected',String(name===key));
+    $('record-tab-'+name).setAttribute('tabindex',name===key ? '0' : '-1');
+  }
+}
+for (const [index,name] of ['summary','raw','recovery'].entries()) {
+  $('record-tab-'+name).addEventListener('keydown',event=>{
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const names=['summary','raw','recovery'];
+    const next=event.key==='Home' ? 0 : event.key==='End' ? 2 : (index+(event.key==='ArrowRight'?1:-1)+3)%3;
+    showRecordTab(names[next]);
+    if (typeof $('record-tab-'+names[next]).focus==='function') $('record-tab-'+names[next]).focus();
+  });
+}
+</script>
+</body>
+</html>

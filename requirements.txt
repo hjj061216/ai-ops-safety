@@ -1,0 +1,2 @@
+# Default application dependencies. For both isolated environments use scripts/setup.py.
+-r requirements-core.txt

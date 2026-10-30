@@ -1,0 +1,81 @@
+version: 1
+description: AI 运维 Agent 可调用的结构化工具白名单。不存在任意 Shell 工具。
+
+risk_order:
+  low: 0
+  medium: 1
+  high: 2
+  critical: 3
+
+resources:
+  service_error_logs:
+    nginx: /var/log/nginx/error.log
+  default_log_lines: 20
+
+tools:
+  check_disk:
+    effect: read
+    description: 查看磁盘使用情况
+    risk: low
+    allowed_roles: [viewer, operator, admin]
+    requires_approval: false
+    parameters: {}
+
+  get_service_status:
+    effect: read
+    description: 查看白名单服务状态
+    risk: low
+    allowed_roles: [viewer, operator, admin]
+    requires_approval: false
+    parameters:
+      name:
+        type: service_name
+        required: true
+        allowed_values: [nginx, payment, api]
+
+  read_log:
+    effect: read
+    description: 读取允许目录中的少量日志
+    risk: low
+    allowed_roles: [viewer, operator, admin]
+    requires_approval: false
+    parameters:
+      path:
+        type: absolute_posix_path
+        required: true
+        allowed_roots: [/var/log/nginx, /var/log/app]
+      lines:
+        type: integer
+        required: true
+        minimum: 1
+        maximum: 200
+
+  restart_service:
+    effect: write
+    description: 重启白名单服务
+    risk: high
+    allowed_roles: [operator, admin]
+    requires_approval: true
+    parameters:
+      name:
+        type: service_name
+        required: true
+        allowed_values: [nginx, payment, api]
+
+  update_config:
+    effect: write
+    description: 修改允许目录内的配置文件
+    risk: high
+    allowed_roles: [admin]
+    requires_approval: true
+    parameters:
+      path:
+        type: absolute_posix_path
+        required: true
+        allowed_roots: [/etc/nginx/conf.d, /etc/myapp]
+      content:
+        type: string
+        required: true
+        minimum_length: 1
+        maximum_length: 10000
+
